@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+.env
+backend/.env
+backend/.venv/
+backend/app/storage/uploads/*
+!backend/app/storage/uploads/.gitkeep
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+.pnpm-store/
