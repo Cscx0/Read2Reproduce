@@ -74,6 +74,24 @@ http://127.0.0.1:5173
 
 Vite 已配置 `/api` 代理到 `http://127.0.0.1:8000`。
 
+## 前后端一键启动
+
+依赖安装完成后，在仓库根目录运行：
+
+```bash
+./scripts/start_all.sh
+```
+
+脚本会同时启动前端和后端；按 `Ctrl+C` 会一起停止两个服务。
+
+## 跨学科测试论文
+
+`test_papers/` 下准备了计算机、物理、数学、化学、生物、医学、经济、社会科学、工程和人文方向的 arXiv PDF 样本。PDF 不纳入 Git，可通过下面的命令下载或补齐：
+
+```bash
+./scripts/download_test_papers.sh
+```
+
 ## 环境变量
 
 后端环境变量位于 `backend/.env`，可以从示例文件复制：
@@ -153,8 +171,12 @@ Read2Reproduce/
     vite.config.ts
     tsconfig.json
   scripts/
+    start_all.sh
     start_backend.sh
     start_frontend.sh
+    download_test_papers.sh
+  test_papers/
+    README.md
   README.md
 ```
 
