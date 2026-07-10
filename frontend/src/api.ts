@@ -13,6 +13,7 @@ export type AnalysisDomain =
   | "humanities"
   | "general";
 export type Difficulty = "low" | "medium" | "high";
+export type KnowledgeLevel = "beginner" | "intermediate" | "advanced";
 
 export interface DetectedResource {
   type: string;
@@ -46,6 +47,26 @@ export interface DocumentAnalysisMeta {
   signals: string[];
   warnings: string[];
   guidance: string;
+}
+
+export interface PrerequisiteTerm {
+  term: string;
+  category: string;
+  why_it_matters: string;
+  difficulty: Difficulty;
+}
+
+export interface PrerequisiteTermsResponse {
+  paper_id: string;
+  analysis_domain: string;
+  knowledge_level: KnowledgeLevel;
+  terms: PrerequisiteTerm[];
+}
+
+export interface KnowledgeProfile {
+  level: KnowledgeLevel;
+  known_terms: string[];
+  unknown_terms: string[];
 }
 
 export interface StructuredSummary {
@@ -122,8 +143,16 @@ export interface RepoGuide {
   risks: string[];
 }
 
+export interface KnowledgeAdaptation {
+  level: KnowledgeLevel;
+  known_terms: string[];
+  unknown_terms: string[];
+  explanation_strategy: string;
+}
+
 export interface AnalysisResult {
   metadata: DocumentAnalysisMeta;
+  knowledge_adaptation?: KnowledgeAdaptation | null;
   structured_summary: StructuredSummary;
   method_flow: { nodes: GraphNode[]; edges: GraphEdge[] };
   formulas: FormulaExplanation[];
@@ -181,15 +210,38 @@ export async function uploadExtra(paperId: string, files: FileList | File[]): Pr
   return parseResponse<UploadExtraResponse>(response);
 }
 
+export async function fetchPrerequisiteTerms(
+  paperId: string,
+  analysisDomain: AnalysisDomain = "auto",
+  knowledgeLevel: KnowledgeLevel = "intermediate"
+): Promise<PrerequisiteTermsResponse> {
+  const response = await fetch(`${API_BASE}/api/prerequisite-terms`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      paper_id: paperId,
+      analysis_domain: analysisDomain,
+      knowledge_level: knowledgeLevel
+    })
+  });
+  return parseResponse<PrerequisiteTermsResponse>(response);
+}
+
 export async function analyzePaper(
   paperId: string,
   mode: AnalyzeMode,
-  analysisDomain: AnalysisDomain = "auto"
+  analysisDomain: AnalysisDomain = "auto",
+  knowledgeProfile?: KnowledgeProfile
 ): Promise<AnalyzeResponse> {
   const response = await fetch(`${API_BASE}/api/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ paper_id: paperId, mode, analysis_domain: analysisDomain })
+    body: JSON.stringify({
+      paper_id: paperId,
+      mode,
+      analysis_domain: analysisDomain,
+      knowledge_profile: knowledgeProfile
+    })
   });
   return parseResponse<AnalyzeResponse>(response);
 }

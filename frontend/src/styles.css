@@ -321,6 +321,149 @@ h3 {
   border-color: #8eb2ff;
 }
 
+.knowledge-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e4e9f2;
+}
+
+.knowledge-heading,
+.prerequisite-heading,
+.term-card-top,
+.term-known-state {
+  display: flex;
+  align-items: center;
+}
+
+.knowledge-heading,
+.prerequisite-heading {
+  justify-content: space-between;
+  gap: 12px;
+  color: #22304a;
+}
+
+.knowledge-heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.knowledge-heading span,
+.prerequisite-heading span {
+  color: #6a768b;
+  font-size: 13px;
+}
+
+.knowledge-heading > span {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  color: #3657d4;
+  background: #edf4ff;
+  border: 1px solid #c9dafd;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.knowledge-level-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.level-button {
+  display: grid;
+  gap: 4px;
+  min-height: 72px;
+  padding: 10px;
+  color: #42516d;
+  text-align: left;
+  background: #f7f9fc;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+}
+
+.level-button span {
+  color: #66738c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.level-button.active {
+  color: #1d4ed8;
+  background: #edf4ff;
+  border-color: #8eb2ff;
+}
+
+.term-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.term-card {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  padding: 12px;
+  color: #33445f;
+  text-align: left;
+  background: #fbfcfe;
+  border: 1px solid #dfe6f0;
+  border-radius: 8px;
+}
+
+.term-card.known {
+  background: #f0fbf6;
+  border-color: #aee2ca;
+}
+
+.term-card-top {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.term-card small {
+  color: #2f7c89;
+  font-weight: 800;
+}
+
+.term-card p {
+  margin: 0;
+  color: #5b6983;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.term-known-state {
+  gap: 6px;
+  color: #66738c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.term-card.known .term-known-state {
+  color: #047857;
+}
+
+.terms-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  color: #465675;
+  background: #f7f9fc;
+  border: 1px solid #dfe6f0;
+  border-radius: 8px;
+}
+
+.terms-status.warning {
+  color: #7c4a25;
+  background: #fff8ed;
+  border-color: #f0c98c;
+}
+
 .resource-list {
   display: grid;
   gap: 10px;
@@ -534,6 +677,42 @@ h3 {
   grid-column: 1 / -1;
 }
 
+.knowledge-adaptation-panel {
+  display: grid;
+  gap: 10px;
+  margin: -4px 0 16px;
+  padding: 12px 14px;
+  color: #26364f;
+  background: #f7fbff;
+  border: 1px solid #d7e6fb;
+  border-radius: 8px;
+}
+
+.knowledge-adaptation-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.knowledge-adaptation-tags span {
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.knowledge-adaptation-tags .known {
+  color: #047857;
+  background: #effbf6;
+  border: 1px solid #b7e5cf;
+}
+
+.knowledge-adaptation-tags .unknown {
+  color: #9a5b00;
+  background: #fff7e6;
+  border: 1px solid #f6cf82;
+}
+
 .tab-panel {
   min-height: 420px;
 }
@@ -619,15 +798,72 @@ h3 {
   border-radius: 8px;
 }
 
-.formula-item code {
+.formula-display {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.formula-display.compact {
+  display: block;
+  margin-bottom: 0;
+}
+
+.formula-render {
+  overflow-x: auto;
+  padding: 14px 12px;
+  color: #10233f;
+  background: linear-gradient(180deg, #f8fbff, #eef4ff);
+  border: 1px solid #d7e4fb;
+  border-radius: 8px;
+}
+
+.formula-render .katex-display {
+  margin: 0;
+}
+
+.formula-inline-render {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 30px;
+  padding: 4px 7px;
+  color: #10233f;
+  background: #eef4ff;
+  border: 1px solid #d7e4fb;
+  border-radius: 7px;
+}
+
+.formula-source {
   display: block;
   overflow-x: auto;
-  margin-bottom: 10px;
-  padding: 12px;
+  margin-top: 8px;
+  padding: 10px;
   color: #10233f;
   background: #eef2f8;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: 14px;
+}
+
+.formula-source.fallback {
+  color: #6d3416;
+  background: #fff8ed;
+  border: 1px solid #f0c98c;
+}
+
+.inline-math {
+  display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  vertical-align: middle;
+}
+
+.inline-formula-fallback {
+  padding: 1px 4px;
+  color: #6d3416;
+  background: #fff8ed;
+  border-radius: 5px;
+  font-size: 0.95em;
 }
 
 .location,
@@ -972,6 +1208,10 @@ td {
   }
 
   .flow-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-level-grid {
     grid-template-columns: 1fr;
   }
 

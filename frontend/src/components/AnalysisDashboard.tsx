@@ -11,7 +11,7 @@ import {
   Network,
   Table2
 } from "lucide-react";
-import { AnalysisResult, DocumentAnalysisMeta } from "../api";
+import { AnalysisResult, DocumentAnalysisMeta, KnowledgeAdaptation } from "../api";
 import { documentTypeLabel, domainLabel } from "../documentMeta";
 import ChecklistView from "./ChecklistView";
 import ExperimentTable from "./ExperimentTable";
@@ -55,6 +55,7 @@ function AnalysisDashboard({ analysis }: AnalysisDashboardProps) {
       </div>
 
       <DocumentMetaPanel meta={meta} />
+      {analysis.knowledge_adaptation && <KnowledgeAdaptationPanel profile={analysis.knowledge_adaptation} />}
 
       <div className="tab-strip" role="tablist" aria-label="Analysis tabs">
         {tabs.map((tab) => {
@@ -99,6 +100,38 @@ function AnalysisDashboard({ analysis }: AnalysisDashboardProps) {
         {activeTab === "repo" && <RepoGuideView guide={analysis.repo_guide} />}
       </div>
     </section>
+  );
+}
+
+function KnowledgeAdaptationPanel({ profile }: { profile: KnowledgeAdaptation }) {
+  const levelLabel = {
+    beginner: "入门",
+    intermediate: "有基础",
+    advanced: "熟悉"
+  }[profile.level];
+
+  return (
+    <div className="knowledge-adaptation-panel">
+      <div className="document-meta-main">
+        <BookOpen size={18} />
+        <div>
+          <strong>已按“{levelLabel}”知识水平调整讲解</strong>
+          <span>{profile.explanation_strategy}</span>
+        </div>
+      </div>
+      <div className="knowledge-adaptation-tags">
+        {profile.known_terms.slice(0, 6).map((term) => (
+          <span className="known" key={`known-${term}`}>
+            已掌握：{term}
+          </span>
+        ))}
+        {profile.unknown_terms.slice(0, 6).map((term) => (
+          <span className="unknown" key={`unknown-${term}`}>
+            待补齐：{term}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 

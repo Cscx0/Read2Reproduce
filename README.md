@@ -5,17 +5,18 @@ Read2Reproduce 是一个面向本科生科研入门的论文阅读与实验复�
 ## 功能列表
 
 - 上传 PDF 并用 PyMuPDF 解析全文、分页文本、标题、摘要和章节标题。
-- 分析前会识别文档类型与学科领域，用户也可以手动选择计算机、物理、数学、医学等大类方向；非论文、扫描件或恶搞文本会返回诊断和下一步建议，而不是套用论文模板。
+- 分析前会识别文档类型与学科领域，并尽量区分“研究对象所属领域”和“使用的计算/机器学习方法”；用户也可以手动选择计算机、物理、数学、医学等大类方向。非论文、扫描件或恶搞文本会返回诊断和下一步建议，而不是套用论文模板。
+- 上传后可选择领域知识水平，系统会先列出论文中的重要前置知识词语，由用户标注“知道/不熟”，再按用户知识储备生成讲解。
 - 正则与关键词规则检测 GitHub、GitLab、HuggingFace、项目主页、代码可用性和补充材料线索。
 - 支持用户选择只分析论文、结合检测到的仓库资源分析，或上传补充资料分析。
 - 补充资料支持 `.txt`、`.md`、`.pdf`、`.zip`；MVP 阶段 zip 先保存不解压。
 - GitHub 资源分析会尝试读取 README、默认分支、文件树、依赖文件和配置文件；网络失败时自动降级。
 - LLM 调用集中封装在 `backend/app/services/llm_client.py`，没有 API Key 时返回完整 mock 结果。
-- 前端用 dashboard 展示结构化总结、方法流程图、关键公式、实验设置、实体表格、相关工作图、复现 checklist 和仓库阅读辅助。
+- 前端用 dashboard 展示结构化总结、方法流程图、渲染后的关键公式与变量符号、实验设置、实体表格、相关工作图、复现 checklist 和仓库阅读辅助。
 
 ## 技术栈
 
-- 前端：React + Vite + TypeScript
+- 前端：React + Vite + TypeScript + KaTeX
 - 后端：Python 3.11 + FastAPI
 - PDF 解析：PyMuPDF
 - 数据结构：Pydantic
@@ -74,6 +75,24 @@ http://127.0.0.1:5173
 
 Vite 已配置 `/api` 代理到 `http://127.0.0.1:8000`。
 
+## 前后端一键启动
+
+依赖安装完成后，在仓库根目录运行：
+
+```bash
+./scripts/start_all.sh
+```
+
+脚本会同时启动前端和后端；按 `Ctrl+C` 会一起停止两个服务。
+
+## 跨学科测试论文
+
+`test_papers/` 下准备了计算机、物理、数学、化学、生物、医学、经济、社会科学、工程和人文方向的 arXiv PDF 样本。PDF 不纳入 Git，可通过下面的命令下载或补齐：
+
+```bash
+./scripts/download_test_papers.sh
+```
+
 ## 环境变量
 
 后端环境变量位于 `backend/.env`，可以从示例文件复制：
@@ -81,6 +100,8 @@ Vite 已配置 `/api` 代理到 `http://127.0.0.1:8000`。
 ```bash
 cp backend/.env.example backend/.env
 ```
+
+
 
 可配置项：
 
@@ -151,8 +172,12 @@ Read2Reproduce/
     vite.config.ts
     tsconfig.json
   scripts/
+    start_all.sh
     start_backend.sh
     start_frontend.sh
+    download_test_papers.sh
+  test_papers/
+    README.md
   README.md
 ```
 

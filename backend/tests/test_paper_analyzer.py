@@ -52,6 +52,31 @@ class PaperAnalyzerTest(unittest.TestCase):
         self.assertIn("不要默认这是一篇计算机科学", prompt)
         self.assertIn("物理问题、理论假设、关键方程", prompt)
 
+    def test_prompt_includes_user_knowledge_profile(self) -> None:
+        document = parsed(
+            """
+            Abstract
+            This paper studies neural networks with attention mechanisms on a benchmark dataset.
+            Introduction Methods Results Discussion References.
+            """ * 4,
+            title="Attention model",
+        )
+        classification = classify_document(document)
+        prompt = _build_prompt(
+            document,
+            [],
+            "paper_only",
+            [],
+            {},
+            classification,
+            {"level": "beginner", "known_terms": ["数据集"], "unknown_terms": ["注意力机制"]},
+        )
+
+        self.assertIn("用户知识画像", prompt)
+        self.assertIn('"level": "beginner"', prompt)
+        self.assertIn("注意力机制", prompt)
+        self.assertIn("unknown_terms 要先用直白中文解释", prompt)
+
     def test_user_selected_domain_overrides_auto_classification(self) -> None:
         text = """
         Quantum transport in superconducting lattice systems
@@ -70,6 +95,30 @@ class PaperAnalyzerTest(unittest.TestCase):
 
         self.assertEqual(result.metadata.domain, "mathematics")
         self.assertIn("用户手动选择分析方向", "".join(result.metadata.signals))
+
+    def test_analysis_result_records_knowledge_adaptation(self) -> None:
+        text = """
+        Abstract
+        We train a neural network on a dataset and compare with a baseline.
+        Introduction Methods Results Discussion References.
+        The model uses an attention mechanism, training loss, and ablation study.
+        [1] A. Smith et al., 2024.
+        """ * 4
+        document = parsed(text, title="Attention model")
+
+        with patch("app.services.paper_analyzer.analyze_with_llm") as analyze_with_llm:
+            analyze_with_llm.side_effect = lambda prompt, schema_name: mock_analysis(schema_name=schema_name, prompt=prompt)
+            result = analyze_paper(
+                document,
+                [],
+                "paper_only",
+                analysis_domain="computer_science",
+                knowledge_profile={"level": "beginner", "known_terms": ["数据集"], "unknown_terms": ["注意力机制"]},
+            )
+
+        self.assertIsNotNone(result.knowledge_adaptation)
+        self.assertEqual(result.knowledge_adaptation.level, "beginner")
+        self.assertIn("注意力机制", result.knowledge_adaptation.unknown_terms)
 
     def test_non_cs_domain_ignores_code_repository_context(self) -> None:
         text = """
