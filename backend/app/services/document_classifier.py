@@ -193,6 +193,180 @@ DOMAIN_KEYWORDS: dict[str, list[str]] = {
     ],
 }
 
+DOMAIN_KEYWORD_WEIGHTS: dict[str, dict[str, float]] = {
+    domain: {keyword: 1.0 for keyword in keywords} for domain, keywords in DOMAIN_KEYWORDS.items()
+}
+
+DOMAIN_KEYWORD_WEIGHTS["computer_science"].update(
+    {
+        # These are common tools in cross-disciplinary papers, so they should not
+        # dominate the paper's subject area by themselves.
+        "neural": 0.35,
+        "neural network": 0.35,
+        "machine learning": 0.35,
+        "deep learning": 0.35,
+        "dataset": 0.3,
+        "datasets": 0.3,
+        "baseline": 0.25,
+        "training": 0.3,
+        "inference": 0.3,
+        "accuracy": 0.25,
+        "gpu": 0.25,
+        "神经网络": 0.35,
+        "数据集": 0.3,
+        "训练": 0.3,
+        "基线": 0.25,
+        # These are closer to CS/NLP/ML as the research object.
+        "algorithm": 1.4,
+        "algorithms": 1.4,
+        "transformer": 2.2,
+        "transformers": 2.2,
+        "attention": 1.4,
+        "self-attention": 2.0,
+        "encoder": 1.4,
+        "decoder": 1.4,
+        "sequence transduction": 2.0,
+        "machine translation": 2.0,
+        "language model": 2.0,
+        "natural language processing": 2.0,
+        "computer vision": 1.8,
+        "repository": 0.8,
+        "代码": 0.8,
+        "算法": 1.4,
+    }
+)
+
+DOMAIN_KEYWORD_WEIGHTS["physics"].update(
+    {
+        "gravitational wave": 2.4,
+        "gravitational waves": 2.4,
+        "black hole": 2.0,
+        "black holes": 2.0,
+        "relativity": 1.8,
+        "ligo": 1.8,
+        "interferometer": 1.6,
+        "cosmology": 1.4,
+        "particle": 1.4,
+        "quantum": 1.4,
+    }
+)
+
+DOMAIN_KEYWORD_WEIGHTS["chemistry"].update(
+    {
+        "chemistry": 2.4,
+        "chemical": 2.2,
+        "molecular": 2.0,
+        "molecule": 1.8,
+        "molecules": 1.8,
+        "atomistic": 1.8,
+        "atomic": 1.4,
+        "density functional theory": 2.4,
+        "dft": 2.4,
+        "force field": 2.4,
+        "force fields": 2.4,
+        "potential energy": 2.0,
+        "quantum chemistry": 2.4,
+        "ab initio": 1.8,
+        "reaction": 1.6,
+        "spectra": 1.4,
+        "nmr": 1.6,
+        "化学": 2.4,
+        "分子": 2.0,
+        "反应": 1.6,
+    }
+)
+
+DOMAIN_KEYWORD_WEIGHTS["biology"].update(
+    {
+        "biological": 2.0,
+        "biophysical": 2.0,
+        "gene expression": 2.4,
+        "cell": 1.6,
+        "cells": 1.6,
+        "protein": 1.6,
+        "genome": 1.8,
+    }
+)
+
+DOMAIN_KEYWORD_WEIGHTS["medicine"].update(
+    {
+        "clinical trial": 2.4,
+        "clinical trials": 2.4,
+        "patient": 1.8,
+        "patients": 1.8,
+        "survival data": 2.0,
+        "hazard ratio": 1.8,
+        "treatment": 1.6,
+    }
+)
+
+DOMAIN_KEYWORD_WEIGHTS["economics"].update(
+    {
+        "economic": 2.4,
+        "economics": 2.4,
+        "economic dynamics": 2.8,
+        "optimality": 2.0,
+        "market": 1.6,
+        "equilibrium": 1.8,
+        "welfare": 1.8,
+        "policy": 1.5,
+        "trade": 1.4,
+        "labor": 1.4,
+        "elasticity": 1.8,
+    }
+)
+
+DOMAIN_KEYWORD_WEIGHTS["social_science"].update(
+    {
+        "social science": 2.8,
+        "social sciences": 2.8,
+        "computational social science": 3.2,
+        "sociology": 2.0,
+        "political science": 2.0,
+        "survey": 1.8,
+        "interview": 1.8,
+        "participant": 1.5,
+        "questionnaire": 1.8,
+        "ethnography": 1.8,
+    }
+)
+
+DOMAIN_KEYWORD_WEIGHTS["engineering"].update(
+    {
+        "engineering": 2.4,
+        "engineered": 1.6,
+        "finite element": 2.6,
+        "statistical finite element": 3.0,
+        "digital twin": 2.6,
+        "digital twinning": 2.8,
+        "self-sensing": 2.4,
+        "structure": 1.4,
+        "structures": 1.4,
+        "structural": 1.8,
+        "sensor": 1.8,
+        "sensors": 1.8,
+        "prototype": 1.6,
+        "control system": 1.8,
+    }
+)
+
+DOMAIN_KEYWORD_WEIGHTS["humanities"].update(
+    {
+        "humanities": 2.4,
+        "digital humanities": 3.0,
+        "historian": 2.6,
+        "historians": 2.6,
+        "historical": 2.0,
+        "history": 1.8,
+        "archive": 1.8,
+        "archives": 1.8,
+        "archival": 2.0,
+        "textual": 1.8,
+        "literature": 1.8,
+        "translation": 0.4,
+    }
+)
+
 SELECTABLE_DOMAINS = {
     "computer_science",
     "physics",
@@ -259,7 +433,7 @@ def classify_document(parsed: ParsedPaper) -> DocumentClassification:
     citation_hits = len(CITATION_RE.findall(text))
     has_abstract = bool(parsed.abstract) or "abstract" in lower_text or "摘要" in text
     has_references = "references" in lower_text or "bibliography" in lower_text or "参考文献" in text
-    domain_scores = _score_domains(lower_text)
+    domain_scores = _score_domains(lower_text, parsed.title, parsed.abstract)
     domain, domain_score = _best_domain(domain_scores)
     joke_hits = len(JOKE_RE.findall(text))
 
@@ -338,22 +512,48 @@ def apply_domain_choice(classification: DocumentClassification, analysis_domain:
     )
 
 
-def _score_domains(lower_text: str) -> Counter[str]:
+def _score_domains(lower_text: str, title: str = "", abstract: str = "") -> Counter[str]:
     scores: Counter[str] = Counter()
-    for domain, keywords in DOMAIN_KEYWORDS.items():
-        for keyword in keywords:
-            if keyword.lower() in lower_text:
-                scores[domain] += 1
+    body_text = lower_text.lower()
+    focus_text = f"{title} {abstract}".lower()
+    if not focus_text.strip():
+        focus_text = body_text[:2400]
+
+    for domain, keyword_weights in DOMAIN_KEYWORD_WEIGHTS.items():
+        for keyword, weight in keyword_weights.items():
+            body_hits = _keyword_hits(body_text, keyword, cap=2)
+            focus_hits = _keyword_hits(focus_text, keyword, cap=2)
+            if not body_hits and not focus_hits:
+                continue
+            scores[domain] += weight * (body_hits + focus_hits * 2.4)
     return scores
 
 
-def _best_domain(scores: Counter[str]) -> tuple[str, int]:
+def _best_domain(scores: Counter[str]) -> tuple[str, float]:
     if not scores:
         return "unknown", 0
     domain, score = scores.most_common(1)[0]
+    if domain == "computer_science":
+        non_cs = [(name, value) for name, value in scores.most_common() if name != "computer_science"]
+        if non_cs:
+            runner_up, runner_up_score = non_cs[0]
+            if runner_up_score >= 4 and score - runner_up_score <= 2.5:
+                return runner_up, runner_up_score
     if score < 2:
         return "unknown", score
     return domain, score
+
+
+def _keyword_hits(text: str, keyword: str, cap: int) -> int:
+    lowered = keyword.lower()
+    if _has_cjk(lowered):
+        return min(text.count(lowered), cap)
+    pattern = rf"(?<![a-z0-9]){re.escape(lowered)}(?![a-z0-9])"
+    return min(len(re.findall(pattern, text)), cap)
+
+
+def _has_cjk(text: str) -> bool:
+    return any("\u4e00" <= char <= "\u9fff" for char in text)
 
 
 def _document_type(lower_text: str, section_hits: int, has_abstract: bool, has_references: bool) -> str:

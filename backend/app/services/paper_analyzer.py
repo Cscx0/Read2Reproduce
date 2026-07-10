@@ -19,10 +19,12 @@ def analyze_paper(
     extra_materials: list[dict[str, Any]] | None = None,
     repo_context: dict[str, Any] | None = None,
     analysis_domain: str = "auto",
+    knowledge_profile: dict[str, Any] | None = None,
 ) -> AnalysisResult:
     classification = apply_domain_choice(classify_document(parsed_paper), analysis_domain)
+    normalized_knowledge_profile = _normalize_knowledge_profile(knowledge_profile)
     if not classification.is_academic_paper:
-        return AnalysisResult.model_validate(_non_paper_analysis(classification, parsed_paper))
+        return AnalysisResult.model_validate(_non_paper_analysis(classification, parsed_paper, normalized_knowledge_profile))
 
     effective_resources = _resources_for_domain(detected_resources, classification.domain)
     effective_repo_context = repo_context or {}
@@ -36,9 +38,11 @@ def analyze_paper(
         extra_materials or [],
         effective_repo_context,
         classification,
+        normalized_knowledge_profile,
     )
     raw = analyze_with_llm(prompt=prompt, schema_name="full_analysis")
     raw["metadata"] = classification.model_dump()
+    raw["knowledge_adaptation"] = _knowledge_adaptation(normalized_knowledge_profile)
 
     if classification.domain != "computer_science":
         raw["repo_guide"] = {
@@ -75,7 +79,9 @@ def analyze_paper(
         if not get_settings().llm_mock_fallback:
             raise
         logger.warning("LLM analysis did not match AnalysisResult schema; using mock. reason=%s", _short_error(exc))
-        return AnalysisResult.model_validate(mock_analysis(schema_name="full_analysis", prompt=prompt))
+        fallback = mock_analysis(schema_name="full_analysis", prompt=prompt)
+        fallback["knowledge_adaptation"] = _knowledge_adaptation(normalized_knowledge_profile)
+        return AnalysisResult.model_validate(fallback)
 
 
 def _build_prompt(
@@ -85,6 +91,7 @@ def _build_prompt(
     extra_materials: list[dict[str, Any]],
     repo_context: dict[str, Any],
     classification: DocumentClassification,
+    knowledge_profile: dict[str, Any] | None = None,
 ) -> str:
     paper_context = extract_focus_chunks(parsed_paper)
     extra_context = "\n\n".join(
@@ -96,11 +103,12 @@ def _build_prompt(
     repo_brief = json.dumps(_trim_repo_context(repo_context), ensure_ascii=False, indent=2)
     resource_brief = json.dumps(detected_resources, ensure_ascii=False, indent=2)
     classification_brief = json.dumps(classification.model_dump(), ensure_ascii=False, indent=2)
+    knowledge_brief = json.dumps(_normalize_knowledge_profile(knowledge_profile), ensure_ascii=False, indent=2)
     schema_contract = json.dumps(AnalysisResult.model_json_schema(), ensure_ascii=False, indent=2)
 
     return f"""
 请基于论文内容生成 Read2Reproduce 的结构化复现分析。输出必须是严格 JSON，字段必须包含：
-structured_summary, method_flow, formulas, experiment_settings, entity_tables,
+knowledge_adaptation, structured_summary, method_flow, formulas, experiment_settings, entity_tables,
 related_work_graph, reproduction_checklist, repo_guide。
 
 输出规则：
@@ -118,12 +126,16 @@ related_work_graph, reproduction_checklist, repo_guide。
    - hardware 应填写仪器、实验装置、观测设施、计算环境或“不适用/未说明”。
 8. 如果分类显示为物理学，请重点分析物理问题、理论假设、关键方程、变量单位、样品/装置、观测量、误差/不确定度和可复现实验条件。
 9. 如果分类显示为数学或人文学科，不要捏造实验、数据集或代码；复现 checklist 应转为验证证明、核对引用、复查推导或追溯材料。
+10. 必须根据“用户知识画像”调整解释：known_terms 只需简洁带过；unknown_terms 要先用直白中文解释，再进入论文方法；level=beginner 时少用术语并给类比，level=intermediate 时解释关键连接，level=advanced 时可更紧凑并强调细节、假设和局限。
 
 JSON Schema：
 {schema_contract}
 
 分析模式：{mode}
 Repo context available: {repo_available}
+用户知识画像：
+{knowledge_brief}
+
 文档分类：
 {classification_brief}
 
@@ -167,7 +179,63 @@ def _resources_for_domain(resources: list[dict[str, Any]], domain: str) -> list[
     return [resource for resource in resources if resource.get("type") not in code_resource_types]
 
 
-def _non_paper_analysis(classification: DocumentClassification, parsed_paper: ParsedPaper) -> dict[str, Any]:
+def _normalize_knowledge_profile(profile: dict[str, Any] | None) -> dict[str, Any]:
+    levels = {"beginner", "intermediate", "advanced"}
+    profile = profile or {}
+    level = str(profile.get("level") or "intermediate")
+    if level not in levels:
+        level = "intermediate"
+
+    known_terms = _clean_terms(profile.get("known_terms", []))
+    known_keys = {term.lower() for term in known_terms}
+    unknown_terms = [term for term in _clean_terms(profile.get("unknown_terms", [])) if term.lower() not in known_keys]
+    return {
+        "level": level,
+        "known_terms": known_terms,
+        "unknown_terms": unknown_terms,
+    }
+
+
+def _clean_terms(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        term = str(item).strip()
+        key = term.lower()
+        if not term or key in seen:
+            continue
+        cleaned.append(term[:80])
+        seen.add(key)
+    return cleaned[:24]
+
+
+def _knowledge_adaptation(profile: dict[str, Any]) -> dict[str, Any]:
+    level = str(profile.get("level") or "intermediate")
+    known_terms = _clean_terms(profile.get("known_terms", []))
+    unknown_terms = _clean_terms(profile.get("unknown_terms", []))
+    if level == "beginner":
+        strategy = "按入门读者讲解：先补齐未知术语，用短句、类比和阅读顺序降低门槛，再解释论文贡献。"
+    elif level == "advanced":
+        strategy = "按熟悉读者讲解：跳过已掌握概念，重点放在论文细节、假设边界、复现风险和可核查证据。"
+    else:
+        strategy = "按有基础读者讲解：简要补齐未知术语，强调概念之间如何连接到方法、实验和结论。"
+    if unknown_terms:
+        strategy += f" 优先解释这些未知前置知识：{', '.join(unknown_terms[:8])}。"
+    return {
+        "level": level,
+        "known_terms": known_terms,
+        "unknown_terms": unknown_terms,
+        "explanation_strategy": strategy,
+    }
+
+
+def _non_paper_analysis(
+    classification: DocumentClassification,
+    parsed_paper: ParsedPaper,
+    knowledge_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     metadata = classification.model_dump()
     reason = classification.warnings[0] if classification.warnings else "当前 PDF 不像标准学术论文。"
     title = parsed_paper.title if parsed_paper.title != "Untitled Paper" else "未识别到可靠标题"
@@ -176,6 +244,7 @@ def _non_paper_analysis(classification: DocumentClassification, parsed_paper: Pa
 
     return {
         "metadata": metadata,
+        "knowledge_adaptation": _knowledge_adaptation(_normalize_knowledge_profile(knowledge_profile)),
         "structured_summary": {
             "background": f"系统已读取上传文件，但分类结果为 {classification.document_type}，不是可直接复现分析的研究论文。",
             "problem": reason,

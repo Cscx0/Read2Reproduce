@@ -5,12 +5,20 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.schemas import AnalyzeRequest, AnalyzeResponse, UploadExtraResponse, UploadPaperResponse
+from app.schemas import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    PrerequisiteTermsRequest,
+    PrerequisiteTermsResponse,
+    UploadExtraResponse,
+    UploadPaperResponse,
+)
 from app.services.document_classifier import classify_document
 from app.services.github_analyzer import analyze_detected_resources
 from app.services.llm_client import get_llm_status, probe_llm
 from app.services.paper_analyzer import analyze_paper
 from app.services.pdf_parser import ParsedPaper, parse_pdf
+from app.services.prerequisite_extractor import extract_prerequisite_terms
 from app.services.resource_detector import detect_resources, has_code_resource
 
 
@@ -141,15 +149,33 @@ async def upload_extra(
     return UploadExtraResponse(paper_id=paper_id, uploaded=uploaded)
 
 
+@app.post("/api/prerequisite-terms", response_model=PrerequisiteTermsResponse)
+async def prerequisite_terms(request: PrerequisiteTermsRequest) -> PrerequisiteTermsResponse:
+    record = PAPERS.get(request.paper_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="paper_id 不存在，请先上传论文。")
+
+    selected_domain = _effective_domain(request.analysis_domain, record)
+    terms = extract_prerequisite_terms(
+        parsed_paper=record["parsed"],
+        domain=selected_domain,
+        knowledge_level=request.knowledge_level,
+    )
+    return PrerequisiteTermsResponse(
+        paper_id=request.paper_id,
+        analysis_domain=selected_domain,
+        knowledge_level=request.knowledge_level,
+        terms=terms,
+    )
+
+
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     record = PAPERS.get(request.paper_id)
     if not record:
         raise HTTPException(status_code=404, detail="paper_id 不存在，请先上传论文。")
 
-    selected_domain = request.analysis_domain
-    if selected_domain == "auto":
-        selected_domain = str(record.get("document_hint", {}).get("domain") or "general")
+    selected_domain = _effective_domain(request.analysis_domain, record)
 
     repo_context = {}
     if request.mode == "with_detected_resources" and selected_domain == "computer_science":
@@ -164,8 +190,16 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         extra_materials=record["extra_materials"],
         repo_context=repo_context,
         analysis_domain=request.analysis_domain,
+        knowledge_profile=request.knowledge_profile.model_dump() if request.knowledge_profile else None,
     )
     return AnalyzeResponse(paper_id=request.paper_id, analysis=analysis)
+
+
+def _effective_domain(analysis_domain: str, record: dict) -> str:
+    selected_domain = analysis_domain
+    if selected_domain == "auto":
+        selected_domain = str(record.get("document_hint", {}).get("domain") or "general")
+    return selected_domain if selected_domain not in {"unknown", "non_academic", ""} else "general"
 
 
 def _resource_models(resources: list[dict]):

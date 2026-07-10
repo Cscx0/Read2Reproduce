@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { Activity, CheckCircle2, FileSearch, GitBranch, UploadCloud } from "lucide-react";
-import { analyzePaper, AnalyzeMode, AnalysisDomain, AnalysisResult, uploadExtra, UploadPaperResponse } from "./api";
+import {
+  analyzePaper,
+  AnalyzeMode,
+  AnalysisDomain,
+  AnalysisResult,
+  KnowledgeProfile,
+  uploadExtra,
+  UploadPaperResponse
+} from "./api";
 import AnalysisDashboard from "./components/AnalysisDashboard";
 import ResourceDecisionPanel from "./components/ResourceDecisionPanel";
 import UploadPanel from "./components/UploadPanel";
@@ -9,7 +17,7 @@ type Stage = "upload" | "decision" | "analysis";
 
 const flowSteps = [
   { key: "upload", label: "上传论文", icon: UploadCloud },
-  { key: "decision", label: "方向选择", icon: GitBranch },
+  { key: "decision", label: "方向与知识", icon: GitBranch },
   { key: "analysis", label: "复现分析", icon: FileSearch }
 ];
 
@@ -27,12 +35,16 @@ function App() {
     setStage("decision");
   };
 
-  const handleAnalyze = async (mode: AnalyzeMode, analysisDomain: AnalysisDomain) => {
+  const handleAnalyze = async (
+    mode: AnalyzeMode,
+    analysisDomain: AnalysisDomain,
+    knowledgeProfile: KnowledgeProfile
+  ) => {
     if (!paper) return;
     setLoadingAnalysis(true);
     setError(null);
     try {
-      const response = await analyzePaper(paper.paper_id, mode, analysisDomain);
+      const response = await analyzePaper(paper.paper_id, mode, analysisDomain, knowledgeProfile);
       setAnalysis(response.analysis);
       setStage("analysis");
     } catch (err) {
@@ -42,13 +54,17 @@ function App() {
     }
   };
 
-  const handleUploadExtraAndAnalyze = async (files: FileList | File[], analysisDomain: AnalysisDomain) => {
+  const handleUploadExtraAndAnalyze = async (
+    files: FileList | File[],
+    analysisDomain: AnalysisDomain,
+    knowledgeProfile: KnowledgeProfile
+  ) => {
     if (!paper) return;
     setLoadingAnalysis(true);
     setError(null);
     try {
       await uploadExtra(paper.paper_id, files);
-      const response = await analyzePaper(paper.paper_id, "with_extra_materials", analysisDomain);
+      const response = await analyzePaper(paper.paper_id, "with_extra_materials", analysisDomain, knowledgeProfile);
       setAnalysis(response.analysis);
       setStage("analysis");
     } catch (err) {

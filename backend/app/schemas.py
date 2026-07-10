@@ -19,6 +19,7 @@ AnalysisDomain = Literal[
     "general",
 ]
 Difficulty = Literal["low", "medium", "high"]
+KnowledgeLevel = Literal["beginner", "intermediate", "advanced"]
 
 
 class DetectedResource(BaseModel):
@@ -67,10 +68,37 @@ class UploadExtraResponse(BaseModel):
     uploaded: list[ExtraMaterialItem]
 
 
+class PrerequisiteTerm(BaseModel):
+    term: str
+    category: str
+    why_it_matters: str
+    difficulty: Difficulty
+
+
+class PrerequisiteTermsRequest(BaseModel):
+    paper_id: str
+    analysis_domain: AnalysisDomain = "auto"
+    knowledge_level: KnowledgeLevel = "intermediate"
+
+
+class PrerequisiteTermsResponse(BaseModel):
+    paper_id: str
+    analysis_domain: str
+    knowledge_level: KnowledgeLevel
+    terms: list[PrerequisiteTerm]
+
+
+class KnowledgeProfile(BaseModel):
+    level: KnowledgeLevel = "intermediate"
+    known_terms: list[str] = []
+    unknown_terms: list[str] = []
+
+
 class AnalyzeRequest(BaseModel):
     paper_id: str
     mode: AnalyzeMode = "paper_only"
     analysis_domain: AnalysisDomain = "auto"
+    knowledge_profile: KnowledgeProfile | None = None
 
 
 class StructuredSummary(BaseModel):
@@ -174,8 +202,16 @@ class RepoGuide(BaseModel):
     risks: list[str] = []
 
 
+class KnowledgeAdaptation(BaseModel):
+    level: KnowledgeLevel
+    known_terms: list[str] = []
+    unknown_terms: list[str] = []
+    explanation_strategy: str
+
+
 class AnalysisResult(BaseModel):
     metadata: DocumentAnalysisMeta
+    knowledge_adaptation: KnowledgeAdaptation | None = None
     structured_summary: StructuredSummary
     method_flow: MethodFlow
     formulas: list[FormulaExplanation]

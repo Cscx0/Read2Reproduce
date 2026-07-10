@@ -1,9 +1,11 @@
-import { ChangeEvent, useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Atom,
   BookOpenCheck,
   Calculator,
+  CheckCircle2,
+  Circle,
   Code2,
   Dna,
   FileUp,
@@ -18,14 +20,26 @@ import {
   Users,
   Wrench
 } from "lucide-react";
-import { AnalysisDomain, AnalyzeMode, UploadPaperResponse } from "../api";
+import {
+  AnalysisDomain,
+  AnalyzeMode,
+  fetchPrerequisiteTerms,
+  KnowledgeLevel,
+  KnowledgeProfile,
+  PrerequisiteTerm,
+  UploadPaperResponse
+} from "../api";
 import { domainLabel } from "../documentMeta";
 
 interface ResourceDecisionPanelProps {
   paper: UploadPaperResponse;
   loading: boolean;
-  onAnalyze: (mode: AnalyzeMode, analysisDomain: AnalysisDomain) => void;
-  onUploadExtraAndAnalyze: (files: FileList | File[], analysisDomain: AnalysisDomain) => void;
+  onAnalyze: (mode: AnalyzeMode, analysisDomain: AnalysisDomain, knowledgeProfile: KnowledgeProfile) => void;
+  onUploadExtraAndAnalyze: (
+    files: FileList | File[],
+    analysisDomain: AnalysisDomain,
+    knowledgeProfile: KnowledgeProfile
+  ) => void;
 }
 
 const domainOptions: Array<{ value: AnalysisDomain; label: string; icon: typeof BookOpenCheck }> = [
@@ -42,6 +56,18 @@ const domainOptions: Array<{ value: AnalysisDomain; label: string; icon: typeof 
   { value: "general", label: "通用", icon: BookOpenCheck }
 ];
 
+const knowledgeLevelOptions: Array<{ value: KnowledgeLevel; label: string; description: string }> = [
+  { value: "beginner", label: "入门", description: "希望先补基础概念，少一些默认术语。" },
+  { value: "intermediate", label: "有基础", description: "了解一些领域语言，需要补关键连接。" },
+  { value: "advanced", label: "熟悉", description: "概念不必展开太多，重点看假设和细节。" }
+];
+
+const difficultyLabels: Record<PrerequisiteTerm["difficulty"], string> = {
+  low: "基础",
+  medium: "进阶",
+  high: "高阶"
+};
+
 function ResourceDecisionPanel({
   paper,
   loading,
@@ -50,29 +76,85 @@ function ResourceDecisionPanel({
 }: ResourceDecisionPanelProps) {
   const [extraFiles, setExtraFiles] = useState<FileList | null>(null);
   const [selectedDomain, setSelectedDomain] = useState<AnalysisDomain>(() => defaultDomain(paper.document_hint.domain));
+  const [knowledgeLevel, setKnowledgeLevel] = useState<KnowledgeLevel>("intermediate");
+  const [terms, setTerms] = useState<PrerequisiteTerm[]>([]);
+  const [knownTerms, setKnownTerms] = useState<Set<string>>(new Set());
+  const [termsLoading, setTermsLoading] = useState(false);
+  const [termsError, setTermsError] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedDomain(defaultDomain(paper.document_hint.domain));
+    setKnowledgeLevel("intermediate");
     setExtraFiles(null);
+    setTerms([]);
+    setKnownTerms(new Set());
+    setTermsError(null);
   }, [paper.paper_id, paper.document_hint.domain]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTermsLoading(true);
+    setTermsError(null);
+    fetchPrerequisiteTerms(paper.paper_id, selectedDomain, knowledgeLevel)
+      .then((response) => {
+        if (cancelled) return;
+        setTerms(response.terms);
+        setKnownTerms(defaultKnownTerms(response.terms, knowledgeLevel));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setTerms([]);
+        setKnownTerms(new Set());
+        setTermsError(err instanceof Error ? err.message : "前置知识提取失败");
+      })
+      .finally(() => {
+        if (!cancelled) setTermsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [paper.paper_id, selectedDomain, knowledgeLevel]);
 
   const handleExtraChange = (event: ChangeEvent<HTMLInputElement>) => {
     setExtraFiles(event.target.files);
   };
 
+  const toggleKnownTerm = (term: string) => {
+    setKnownTerms((current) => {
+      const next = new Set(current);
+      if (next.has(term)) {
+        next.delete(term);
+      } else {
+        next.add(term);
+      }
+      return next;
+    });
+  };
+
+  const knowledgeProfile = useMemo<KnowledgeProfile>(() => {
+    const known = terms.filter((term) => knownTerms.has(term.term)).map((term) => term.term);
+    const unknown = terms.filter((term) => !knownTerms.has(term.term)).map((term) => term.term);
+    return {
+      level: knowledgeLevel,
+      known_terms: known,
+      unknown_terms: unknown
+    };
+  }, [knowledgeLevel, knownTerms, terms]);
+
   const hasCode = paper.has_code_resource && selectedDomain === "computer_science";
   const isAcademic = paper.document_hint.is_academic_paper;
   const selectedLabel = domainLabel(selectedDomain);
   const recommended = defaultDomain(paper.document_hint.domain);
+  const disableAnalyze = loading || termsLoading;
 
   return (
     <section className="panel decision-panel">
       <div className="panel-heading">
         <div>
           <p className="section-kicker">Step 2</p>
-          <h2>选择分析范围</h2>
+          <h2>选择方向与知识准备</h2>
         </div>
-        {loading ? <Loader2 className="spin" size={20} /> : <SearchCode size={20} />}
+        {loading || termsLoading ? <Loader2 className="spin" size={20} /> : <SearchCode size={20} />}
       </div>
 
       <section className="domain-picker" aria-label="选择分析方向">
@@ -99,6 +181,16 @@ function ResourceDecisionPanel({
         </div>
       </section>
 
+      <KnowledgePreparation
+        knownTerms={knownTerms}
+        knowledgeLevel={knowledgeLevel}
+        loading={termsLoading}
+        error={termsError}
+        terms={terms}
+        onLevelChange={setKnowledgeLevel}
+        onToggleKnown={toggleKnownTerm}
+      />
+
       {!isAcademic ? (
         <>
           <p className="decision-copy warning-copy">
@@ -113,13 +205,17 @@ function ResourceDecisionPanel({
           <div className="button-row">
             <button
               className="primary-button"
-              disabled={loading || !extraFiles?.length}
-              onClick={() => extraFiles && onUploadExtraAndAnalyze(extraFiles, selectedDomain)}
+              disabled={disableAnalyze || !extraFiles?.length}
+              onClick={() => extraFiles && onUploadExtraAndAnalyze(extraFiles, selectedDomain, knowledgeProfile)}
             >
               {loading ? <Loader2 className="spin" size={16} /> : <FileUp size={16} />}
               结合补充资料分析
             </button>
-            <button className="secondary-button" disabled={loading} onClick={() => onAnalyze("paper_only", selectedDomain)}>
+            <button
+              className="secondary-button"
+              disabled={disableAnalyze}
+              onClick={() => onAnalyze("paper_only", selectedDomain, knowledgeProfile)}
+            >
               <Play size={16} />
               查看诊断结果
             </button>
@@ -143,13 +239,17 @@ function ResourceDecisionPanel({
           <div className="button-row">
             <button
               className="primary-button"
-              disabled={loading}
-              onClick={() => onAnalyze("with_detected_resources", selectedDomain)}
+              disabled={disableAnalyze}
+              onClick={() => onAnalyze("with_detected_resources", selectedDomain, knowledgeProfile)}
             >
               {loading ? <Loader2 className="spin" size={16} /> : <GitBranch size={16} />}
               结合仓库分析
             </button>
-            <button className="secondary-button" disabled={loading} onClick={() => onAnalyze("paper_only", selectedDomain)}>
+            <button
+              className="secondary-button"
+              disabled={disableAnalyze}
+              onClick={() => onAnalyze("paper_only", selectedDomain, knowledgeProfile)}
+            >
               <Play size={16} />
               只分析论文
             </button>
@@ -169,13 +269,17 @@ function ResourceDecisionPanel({
           <div className="button-row">
             <button
               className="primary-button"
-              disabled={loading || !extraFiles?.length}
-              onClick={() => extraFiles && onUploadExtraAndAnalyze(extraFiles, selectedDomain)}
+              disabled={disableAnalyze || !extraFiles?.length}
+              onClick={() => extraFiles && onUploadExtraAndAnalyze(extraFiles, selectedDomain, knowledgeProfile)}
             >
               {loading ? <Loader2 className="spin" size={16} /> : <FileUp size={16} />}
               结合补充资料分析
             </button>
-            <button className="secondary-button" disabled={loading} onClick={() => onAnalyze("paper_only", selectedDomain)}>
+            <button
+              className="secondary-button"
+              disabled={disableAnalyze}
+              onClick={() => onAnalyze("paper_only", selectedDomain, knowledgeProfile)}
+            >
               <Play size={16} />
               直接分析论文
             </button>
@@ -183,6 +287,106 @@ function ResourceDecisionPanel({
         </>
       )}
     </section>
+  );
+}
+
+function KnowledgePreparation({
+  knownTerms,
+  knowledgeLevel,
+  loading,
+  error,
+  terms,
+  onLevelChange,
+  onToggleKnown
+}: {
+  knownTerms: Set<string>;
+  knowledgeLevel: KnowledgeLevel;
+  loading: boolean;
+  error: string | null;
+  terms: PrerequisiteTerm[];
+  onLevelChange: (level: KnowledgeLevel) => void;
+  onToggleKnown: (term: string) => void;
+}) {
+  return (
+    <section className="knowledge-panel" aria-label="前置知识确认">
+      <div className="knowledge-heading">
+        <div>
+          <strong>你的领域知识水平</strong>
+          <span>agent 会按这份画像调整讲解深度</span>
+        </div>
+        <span>{terms.length ? `${knownTerms.size}/${terms.length} 已掌握` : "等待术语"}</span>
+      </div>
+
+      <div className="knowledge-level-grid">
+        {knowledgeLevelOptions.map((option) => (
+          <button
+            className={knowledgeLevel === option.value ? "level-button active" : "level-button"}
+            key={option.value}
+            type="button"
+            onClick={() => onLevelChange(option.value)}
+          >
+            <strong>{option.label}</strong>
+            <span>{option.description}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="prerequisite-heading">
+        <strong>论文前置知识词语</strong>
+        <span>点一下表示“我知道”，未选会按“不熟”处理</span>
+      </div>
+
+      {loading ? (
+        <p className="terms-status">
+          <Loader2 className="spin" size={16} />
+          正在从论文中提取前置术语…
+        </p>
+      ) : error ? (
+        <p className="terms-status warning">
+          <AlertTriangle size={16} />
+          {error}，仍可继续分析。
+        </p>
+      ) : terms.length ? (
+        <div className="term-grid">
+          {terms.map((term) => {
+            const known = knownTerms.has(term.term);
+            return (
+              <button
+                aria-pressed={known}
+                className={known ? "term-card known" : "term-card"}
+                key={`${term.term}-${term.category}`}
+                type="button"
+                onClick={() => onToggleKnown(term.term)}
+              >
+                <span className="term-card-top">
+                  <strong>{term.term}</strong>
+                  <b className={`difficulty-pill ${term.difficulty}`}>{difficultyLabels[term.difficulty]}</b>
+                </span>
+                <small>{term.category}</small>
+                <p>{term.why_it_matters}</p>
+                <span className="term-known-state">
+                  {known ? <CheckCircle2 size={15} /> : <Circle size={15} />}
+                  {known ? "我知道" : "我还不熟"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="terms-status">暂未抽取到稳定术语，agent 会按你的知识水平直接讲解。</p>
+      )}
+    </section>
+  );
+}
+
+function defaultKnownTerms(terms: PrerequisiteTerm[], level: KnowledgeLevel): Set<string> {
+  const knownDifficulties: Record<KnowledgeLevel, Array<PrerequisiteTerm["difficulty"]>> = {
+    beginner: [],
+    intermediate: ["low"],
+    advanced: ["low", "medium"]
+  };
+  return new Set(
+    terms.filter((term) => knownDifficulties[level].includes(term.difficulty)).map((term) => term.term)
   );
 }
 
